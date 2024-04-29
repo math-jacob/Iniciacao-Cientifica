@@ -1,0 +1,12 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Related work
+sgcc-main
+
+# Test files
+agglomerative-clustering.py
+
+# Specific formats
+*.png
