@@ -15,6 +15,9 @@ from sklearn import metrics
 from sklearn.cluster import AgglomerativeClustering
 from scipy.optimize import linear_sum_assignment as linear_assignment
 
+# 
+import math
+
 class GCN_Clustering():
 
   def __init__(
@@ -190,12 +193,12 @@ class GCN_Clustering():
     print()
 
     # CHAMANDO ALGORITMO DO FELIPE PARA O CLUSTER[0]
-    representative_node = self.get_representative_node(clusters[0], x_test)
+    representative_node = self.get_representative_node(clusters, x_test)
 
     # Testando meu algoritmo -> avaliação do nó representativo
     # Considerando nó representativo = 72 (para o cluster 0)
     representative_node = 500
-    acc = self.avaliate_representative_node(clusters[0], y_test, representative_node)
+    acc = self.avaliate_representative_node(clusters, y_test, representative_node)
     return edge_index
 
   def get_test_features_and_labels(self, features, labels):
@@ -339,10 +342,19 @@ class GCN_Clustering():
 
     return clusters
 
-
   def get_representative_node(self, clusters, x_test):
-    # ----------------- IMPLEMENTAÇÃO CÓDIGO FELIPE -----------------
-    print()
+    sum_distances = []
+    for i_cluster in range(0,len(clusters)):
+        sum_distances.append([])
+        for i in range(0,len(clusters[i_cluster])):
+            for j in range(0,len(clusters[i_cluster])):
+                sum_distances[i_cluster].append(0)
+                # Soma das diferenças de 'coordenadas' ao quadrado (número de coordenadas igual a len(x_test[i]))
+                sum_distances[i_cluster][-1] = sum([abs(x_test[clusters[i_cluster][i]][k] - x_test[clusters[i_cluster][j]][k])**2 for k in range(0,len(x_test[i]))])
+                sum_distances[i_cluster][-1] = math.sqrt(sum_distances[i_cluster][-1])
+
+    # Retorna o índice do nó representativo em x_test (nó correspondente a clusters[i])
+    return ([clusters[i][sum_distances[i].index(min(sum_distances[i]))] for i in range(0,len(sum_distances))])
 
   def avaliate_representative_node(self, cluster, y_test, representative_node):
     
