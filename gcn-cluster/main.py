@@ -197,7 +197,6 @@ class GCN_Clustering():
 
     # Testando meu algoritmo -> avaliação do nó representativo
     # Considerando nó representativo = 72 (para o cluster 0)
-    representative_node = 500
     acc = self.avaliate_representative_node(clusters, y_test, representative_node)
     return edge_index
 
