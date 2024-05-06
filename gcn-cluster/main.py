@@ -193,11 +193,13 @@ class GCN_Clustering():
     print()
 
     # CHAMANDO ALGORITMO DO FELIPE PARA O CLUSTER[0]
-    representative_node = self.get_representative_node(clusters, x_test)
+    representative_nodes = self.get_representative_nodes(clusters, x_test)
+    print(f'representative_nodes: {representative_nodes}\n')
 
     # Testando meu algoritmo -> avaliação do nó representativo
-    # Considerando nó representativo = 72 (para o cluster 0)
-    acc = self.avaliate_representative_node(clusters, y_test, representative_node)
+    representative_node_acc_list = self.avaliate_representative_nodes(clusters, y_test, representative_nodes)
+    print(f'representative_nodes_acc_list: {representative_node_acc_list}\n')
+    
     return edge_index
 
   def get_test_features_and_labels(self, features, labels):
@@ -341,34 +343,43 @@ class GCN_Clustering():
 
     return clusters
 
-  def get_representative_node(self, clusters, x_test):
+  def get_representative_nodes(self, clusters, x_test):
+    representative_nodes = []
     sum_distances = []
     for i_cluster in range(0,len(clusters)):
-        sum_distances.append([])
-        for i in range(0,len(clusters[i_cluster])):
-            for j in range(0,len(clusters[i_cluster])):
-                sum_distances[i_cluster].append(0)
-                # Soma das diferenças de 'coordenadas' ao quadrado (número de coordenadas igual a len(x_test[i]))
-                sum_distances[i_cluster][-1] = sum([abs(x_test[clusters[i_cluster][i]][k] - x_test[clusters[i_cluster][j]][k])**2 for k in range(0,len(x_test[i]))])
-                sum_distances[i_cluster][-1] = math.sqrt(sum_distances[i_cluster][-1])
+      sum_distances.append([])
+      for i in range(0,len(clusters[i_cluster])):
+        for j in range(0,len(clusters[i_cluster])):
+          sum_distances[i_cluster].append(0)
+          # Soma das diferenças de 'coordenadas' ao quadrado (número de coordenadas igual a len(x_test[i]))
+          sum_distances[i_cluster][-1] = sum([abs(x_test[clusters[i_cluster][i]][k] - x_test[clusters[i_cluster][j]][k])**2 for k in range(0,len(x_test[i]))])
+          sum_distances[i_cluster][-1] = math.sqrt(sum_distances[i_cluster][-1])
 
-    # Retorna o índice do nó representativo em x_test (nó correspondente a clusters[i])
-    return ([clusters[i][sum_distances[i].index(min(sum_distances[i]))] for i in range(0,len(sum_distances))])
+      # Realiza append do índice do nó representativo em x_test (nó correspondente a clusters[i])
+      representative_nodes.append(( clusters[i_cluster][sum_distances[i_cluster].index(min(sum_distances[i_cluster]))] ))
 
-  def avaliate_representative_node(self, cluster, y_test, representative_node):
+    return representative_nodes
+
+  def avaliate_representative_nodes(self, clusters, y_test, representative_nodes):
     
-    print('---------------- Avaliating Representative Node ----------------')
+    print('---------------- Avaliating Representative Nodes ----------------')
 
-    same_class_sum = 0
-    representative_node_class = y_test[representative_node]
-    print(f'y[representative_node]: {representative_node_class}\n')
+    representative_nodes_acc_list = []
+    for cluster in clusters:
+      representative_node_class = y_test[representative_nodes[clusters.index(cluster)]]
+      print(f'y[representative_node]: {representative_node_class}')
 
-    for node in cluster:
-      # print(f'node: {node}, y[node]: {y_test[node]}')
-      if y_test[node] == representative_node_class:
-        same_class_sum += 1
+      same_class_sum = 0
+      for node in cluster:
+        # print(f'node: {node}, y[node]: {y_test[node]}')
+        if y_test[node] == representative_node_class:
+          same_class_sum += 1
 
-    acc = same_class_sum / len(cluster)
-    print(f'same_class_sum: {same_class_sum}')
-    print(f'cluster_size: {len(cluster)}')
-    print(f'acc: {acc}\n')
+      acc = same_class_sum / len(cluster)
+      print(f'same_class_sum: {same_class_sum}')
+      print(f'cluster_size: {len(cluster)}')
+      print(f'acc: {acc}\n')
+
+      representative_nodes_acc_list.append(acc)
+    
+    return representative_nodes_acc_list
