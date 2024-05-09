@@ -192,13 +192,15 @@ class GCN_Clustering():
     print(x_test[clusters[11][0]])
     print()
 
-    # CHAMANDO ALGORITMO DO FELIPE PARA O CLUSTER[0]
     representative_nodes = self.get_representative_nodes(clusters, x_test)
     print(f'representative_nodes: {representative_nodes}\n')
 
+    print('Verificação das classes de um cluster específico')
+    for index in clusters[10]:
+      print(y_test[index])
+
     # Testando meu algoritmo -> avaliação do nó representativo
     representative_node_acc_list = self.avaliate_representative_nodes(clusters, y_test, representative_nodes)
-    print(f'representative_nodes_acc_list: {representative_node_acc_list}\n')
     
     return edge_index
 
@@ -266,7 +268,7 @@ class GCN_Clustering():
     METRIC = 'euclidean'
     LINKAGE = 'ward'
 
-    alpha = 0.2
+    alpha = 0.95
     cluster_measurements = []
     aux_measures = {}
     index = 0
@@ -365,8 +367,8 @@ class GCN_Clustering():
     print('---------------- Avaliating Representative Nodes ----------------')
 
     representative_nodes_acc_list = []
-    for cluster in clusters:
-      representative_node_class = y_test[representative_nodes[clusters.index(cluster)]]
+    for index, cluster in enumerate(clusters):
+      representative_node_class = y_test[representative_nodes[index]]
       print(f'y[representative_node]: {representative_node_class}')
 
       same_class_sum = 0
@@ -382,4 +384,30 @@ class GCN_Clustering():
 
       representative_nodes_acc_list.append(acc)
     
+    df = pd.DataFrame(representative_nodes_acc_list, columns=['accuracy'])
+    print('representative_nodes_acc_list')
+    print(f'{df}\n')
+
+    # ------------------------------ CONVERTENDO PARA EXCEL OS DADOS --------------------------------
+
+    from openpyxl.utils.dataframe import dataframe_to_rows
+    from openpyxl import Workbook
+    # Supondo que 'df' seja seu DataFrame
+    # Arredondando os valores da coluna 'accuracy' para 4 casas decimais
+    df['accuracy'] = df['accuracy'].round(4)
+
+    # Criando um novo arquivo Excel
+    wb = Workbook()
+    ws = wb.active
+
+    # Adicionando os dados do DataFrame ao arquivo Excel
+    for r_idx, row in enumerate(dataframe_to_rows(df, index=False), 1):
+      for c_idx, value in enumerate(row, 1):
+        if isinstance(value, float):
+          value = '{:.4f}'.format(value).replace('.', ',')  # Formatar o valor com vírgula
+        ws.cell(row=r_idx, column=c_idx, value=value)
+
+    # Salvando o arquivo Excel
+    wb.save('output.xlsx')
+
     return representative_nodes_acc_list
