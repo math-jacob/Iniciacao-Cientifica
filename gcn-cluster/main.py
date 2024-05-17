@@ -52,96 +52,93 @@ class GCN_Clustering():
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
+    # Edge index
+    edge_index = self.create_graph(ranked_list_path=ranked_list_path, features=features, labels=labels)
+    edge_index = torch.tensor(edge_index)
+    edge_index = edge_index.t().contiguous().to(device)
+
     # Data definition
-    x = torch.tensor(features).to(device)
-    y = torch.tensor(labels).to(device)
+    x = torch.tensor(self.features).to(device)
+    y = torch.tensor(self.labels, dtype=torch.long).to(device)
 
     # Mask definition
     train_mask = torch.tensor(self.train_mask).to(device)
     test_mask = torch.tensor(self.test_mask).to(device)
     val_mask = torch.tensor(self.val_mask).to(device)
 
-    # Edge index
-    # edge_index = self.compute_edge_index(ranked_list_path=ranked_list_path)
-    edge_index = self.create_graph(ranked_list_path=ranked_list_path, features=features, labels=labels)
-    edge_index = torch.tensor(edge_index)
-    edge_index = edge_index.t().contiguous().to(device)
 
     # -------------------------------------------------- PARTE QUE IMPLEMENTA A GCN --------------------------------------------------
 
-    # print(edge_index.shape)
+    # Tensor data
+    data = Data(
+      x=x.float(),
+      edge_index=edge_index, 
+      y=y,
+      train_mask=train_mask,
+      test_mask=test_mask
+    ) # está sem validação
 
-    # # Tensor data
-    # data = Data(
-    #   x=x.float(),
-    #   edge_index=edge_index, 
-    #   y=y,
-    #   train_mask=train_mask,
-    #   test_mask=test_mask
-    # ) # está sem validação
-
-    # # Variables
-    # pNNeurons = 32
-    # pNEpochs = 200
-    # pNFeatures = len(features[0])
-    # print(f'features = {pNFeatures}\n')
-    # pLR = 0.001
-    # NUM_EXECS = 30
+    # Variables
+    pNNeurons = 32
+    pNEpochs = 200
+    pNFeatures = len(features[0])
+    pLR = 0.001
+    NUM_EXECS = 30
     
-    # # Defining GCN Model
-    # class Net(torch.nn.Module):
-    #   def __init__(self):
-    #     super(Net, self).__init__()
-    #     self.conv1 = GCNConv(pNFeatures, pNNeurons)
-    #     self.conv2 = GCNConv(pNNeurons, num_classes)
+    # Defining GCN Model
+    class Net(torch.nn.Module):
+      def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = GCNConv(pNFeatures, pNNeurons)
+        self.conv2 = GCNConv(pNNeurons, num_classes)
 
-    #   def forward(self, data):
-    #     x, edge_index = data.x, data.edge_index
+      def forward(self, data):
+        x, edge_index = data.x, data.edge_index
 
-    #     x = self.conv1(x, edge_index)
-    #     x = F.relu(x)
-    #     x = F.dropout(x, training=self.training)
-    #     x = self.conv2(x, edge_index)
+        x = self.conv1(x, edge_index)
+        x = F.relu(x)
+        x = F.dropout(x, training=self.training)
+        x = self.conv2(x, edge_index)
 
-    #     return F.log_softmax(x, dim=1)
+        return F.log_softmax(x, dim=1)
     
-    # # Model and optimizer
-    # model = Net().to(device)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=pLR, weight_decay=5e-4)
+    # Model and optimizer
+    model = Net().to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=pLR, weight_decay=5e-4)
 
-    # # Training
-    # acc_list = []
-    # for exec in range(NUM_EXECS):
-    #   model.train()
-    #   for epoch in range(pNEpochs):	
-    #     optimizer.zero_grad()
-    #     out = model(data)
+    # Training
+    acc_list = []
+    for exec in range(NUM_EXECS):
+      model.train()
+      for epoch in range(pNEpochs):	
+        optimizer.zero_grad()
+        out = model(data)
 
-    #     # Overfit checking
-    #     # _, pred = out.max(dim=1)
-    #     # correct = float(pred[data.train_mask]
-    #     #   .eq(data.y[data.train_mask])
-    #     #   .sum()
-    #     #   .item())
-    #     # acc = correct / data.train_mask.sum().item()
-    #     # if acc == 1.0:
-    #     #   print(f"Early stoping on epoch {epoch}")
-    #     #   break
+        # Overfit checking
+        # _, pred = out.max(dim=1)
+        # correct = float(pred[data.train_mask]
+        #   .eq(data.y[data.train_mask])
+        #   .sum()
+        #   .item())
+        # acc = correct / data.train_mask.sum().item()
+        # if acc == 1.0:
+        #   print(f"Early stoping on epoch {epoch}")
+        #   break
 
-    #     loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
-    #     loss.backward()
-    #     optimizer.step()
+        loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
+        loss.backward()
+        optimizer.step()
       
-    #   model.eval()
-    #   _, pred = model(data).max(dim=1)
+      model.eval()
+      _, pred = model(data).max(dim=1)
 
-    #   # Training accuracy
-    #   correct = float(pred[data.test_mask].eq(data.y[data.test_mask]).sum().item())
-    #   acc = correct / data.test_mask.sum().item()
-    #   acc_list.append(acc)
-    #   print(f'acc_list = {acc_list}\n')
+      # Training accuracy
+      correct = float(pred[data.test_mask].eq(data.y[data.test_mask]).sum().item())
+      acc = correct / data.test_mask.sum().item()
+      acc_list.append(acc)
+      # print(f'acc_list = {acc_list}\n')
 
-    # print(f'Accuracy: {sum(acc_list)/NUM_EXECS}')
+    print(f'Accuracy: {sum(acc_list)/NUM_EXECS}')
 
   def create_graph(self, ranked_list_path, features, labels):
     edge_index = self.compute_edge_index(ranked_list_path=ranked_list_path)
@@ -186,12 +183,6 @@ class GCN_Clustering():
 
     clusters = self.get_clusters(cluster_labels, num_clusters)
 
-    print('Testando equivalencia cluster[i][j] == x_test[cluster[i][j]]')
-    print(clusters[11][0])
-    print(x_test[0])
-    print(x_test[clusters[11][0]])
-    print()
-
     representative_nodes = self.get_representative_nodes(clusters, x_test)
     print(f'representative_nodes: {representative_nodes}\n')
 
@@ -201,7 +192,10 @@ class GCN_Clustering():
 
     # Testando meu algoritmo -> avaliação do nó representativo
     representative_node_acc_list = self.avaliate_representative_nodes(clusters, y_test, representative_nodes)
-    
+
+    # ------------- Task Matheus: criando nós sintéticos --------------
+    edge_index = self.create_sintetic_nodes(edge_index, features, labels, clusters, representative_nodes, y_test)
+
     return edge_index
 
   def get_test_features_and_labels(self, features, labels):
@@ -411,3 +405,60 @@ class GCN_Clustering():
     wb.save('output.xlsx')
 
     return representative_nodes_acc_list
+
+  def create_sintetic_nodes(self, edge_index, features, labels, clusters, representative_nodes, y_test):
+    
+    print(f'--- ANTES DE CONECTAR ---\n')
+    print(f'edge_index = {edge_index[:30]}')
+    print(f'edge_index.shape = ({len(edge_index)},{len(edge_index[0])})\n')
+
+    print(f'features = {features}')
+    print(f'features.shape = ({len(features)},{len(features[-1])})\n')
+
+    print(f'train_mask.shape = {len(self.train_mask)}')
+    print(f'test_mask.shape = {len(self.test_mask)}\n')
+
+    new_features = []
+    new_labels = []
+    for index, cluster in enumerate(clusters):
+      # representative node
+      representative_node = representative_nodes[index]
+      representative_node_class = y_test[representative_node]
+
+      # sintetic node
+      sintetic_node_index = len(features - 1)
+      sintetic_node_features = features[representative_node]
+
+      # updating features, labels and maks
+      new_features.append(sintetic_node_features)
+      new_labels.append(representative_node_class)
+      self.train_mask.append(False)
+      self.test_mask.append(True)
+
+      # Updating edge_index -> connecting sintetic_node to all other nodes from its cluster
+      # TODO: CONFIRMAR SE ISSO ESTÁ CORRETO (acho que estou conectando o índice "node" errado)
+      # TODO: "node" é o índice do nó no x_test e não o indice no dataset como um todo
+      # TODO: talvez eu tenha que gerar os clusters a partir de todo o dataset, nao só o x_test e y_test
+      for node in cluster:
+        if node != representative_node:
+          edge_index.append((sintetic_node_index, node))
+
+    features = np.append(features, np.array(new_features), axis=0)
+    labels = np.append(labels, np.array(new_labels), axis=0)
+    self.features = features
+    self.labels = labels
+
+    print(f'--- DEPOIS DE CONECTAR ---\n')
+
+    print(f'edge_index = {edge_index[:30]}')
+    print(f'edge_index.shape = ({len(edge_index)},{len(edge_index[0])})\n')
+
+    print(f'features = {features}')
+    print(f'features.shape = ({len(features)},{len(features[-1])})\n')
+
+    print(f'train_mask.shape = ({len(self.train_mask)})')
+    print(f'test_mask.shape = ({len(self.test_mask)})\n')
+
+    print(f'labels.shape = ({len(labels)})\n')
+
+    return edge_index
