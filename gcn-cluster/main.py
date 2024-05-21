@@ -2,6 +2,7 @@
 import time
 import numpy as np
 import pandas as pd
+from utils import export_to_excel
 
 # Torch packages
 import torch
@@ -65,7 +66,6 @@ class GCN_Clustering():
     train_mask = torch.tensor(self.train_mask).to(device)
     test_mask = torch.tensor(self.test_mask).to(device)
     val_mask = torch.tensor(self.val_mask).to(device)
-
 
     # -------------------------------------------------- PARTE QUE IMPLEMENTA A GCN --------------------------------------------------
 
@@ -193,7 +193,6 @@ class GCN_Clustering():
     # Testando meu algoritmo -> avaliação do nó representativo
     representative_node_acc_list = self.avaliate_representative_nodes(clusters, labels, representative_nodes)
 
-    # ------------- Task Matheus: criando nós sintéticos --------------
     edge_index = self.create_sintetic_nodes(edge_index, features, labels, clusters, representative_nodes)
 
     return edge_index
@@ -310,6 +309,7 @@ class GCN_Clustering():
     df = pd.DataFrame(cluster_measurements)
     print('Avaliando Cluster:')
     print(f'{df}\n')
+    export_to_excel(df, "cluster_avaliation.xlsx")
 
     print('Cluster Info:')
     print(f'n_clusters: {model.n_clusters_}')
@@ -385,27 +385,7 @@ class GCN_Clustering():
     print('representative_nodes_acc_list')
     print(f'{df}\n')
 
-    # ------------------------------ CONVERTENDO PARA EXCEL OS DADOS --------------------------------
-
-    from openpyxl.utils.dataframe import dataframe_to_rows
-    from openpyxl import Workbook
-    # Supondo que 'df' seja seu DataFrame
-    # Arredondando os valores da coluna 'accuracy' para 4 casas decimais
-    df['accuracy'] = df['accuracy'].round(4)
-
-    # Criando um novo arquivo Excel
-    wb = Workbook()
-    ws = wb.active
-
-    # Adicionando os dados do DataFrame ao arquivo Excel
-    for r_idx, row in enumerate(dataframe_to_rows(df, index=False), 1):
-      for c_idx, value in enumerate(row, 1):
-        if isinstance(value, float):
-          value = '{:.4f}'.format(value).replace('.', ',')  # Formatar o valor com vírgula
-        ws.cell(row=r_idx, column=c_idx, value=value)
-
-    # Salvando o arquivo Excel
-    wb.save('output.xlsx')
+    export_to_excel(df, 'representative_nodes_avaliation.xlsx')
 
     return representative_nodes_acc_list
 
