@@ -83,7 +83,7 @@ class GCN_Clustering():
     pNEpochs = 200
     pNFeatures = len(features[0])
     pLR = 0.001
-    NUM_EXECS = 30
+    NUM_EXECS = 100
     
     # Defining GCN Model
     class Net(torch.nn.Module):
@@ -341,18 +341,21 @@ class GCN_Clustering():
 
   def get_representative_nodes(self, clusters, features):
     representative_nodes = []
-    sum_distances = []
-    for i_cluster in range(0,len(clusters)):
-      sum_distances.append([])
-      for i in range(0,len(clusters[i_cluster])):
-        for j in range(0,len(clusters[i_cluster])):
-          sum_distances[i_cluster].append(0)
-          # Soma das diferenças de 'coordenadas' ao quadrado (número de coordenadas igual a len(x_test[i]))
-          sum_distances[i_cluster][-1] = sum([abs(features[clusters[i_cluster][i]][k] - features[clusters[i_cluster][j]][k])**2 for k in range(0,len(features[i]))])
-          sum_distances[i_cluster][-1] = math.sqrt(sum_distances[i_cluster][-1])
 
-      # Realiza append do índice do nó representativo em features (nó correspondente a clusters[i])
-      representative_nodes.append(( clusters[i_cluster][sum_distances[i_cluster].index(min(sum_distances[i_cluster]))] ))
+    for i_cluster in range(0,len(clusters)):
+      sum_distances = [0] * len(clusters[i_cluster])
+
+      for i in range(len(clusters[i_cluster])):
+        for j in range(len(clusters[i_cluster])):
+          sum_distances[i] += math.sqrt(
+            sum(
+              (features[clusters[i_cluster][i]][k] - features[clusters[i_cluster][j]][k])**2
+              for k in range(len(features[clusters[i_cluster][i]]))
+            )
+          )
+
+      representative_node = clusters[i_cluster][sum_distances.index(min(sum_distances))]
+      representative_nodes.append(representative_node)
 
     return representative_nodes
 
