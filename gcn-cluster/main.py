@@ -179,22 +179,22 @@ class GCN_Clustering():
   def graph_augumentation(self, edge_index, features, labels):
     x_test, y_test = self.get_test_features_and_labels(features, labels)
 
-    cluster_labels, num_clusters = self.run_cluster(x_test, y_test)
+    cluster_labels, num_clusters = self.run_cluster(features, labels)
 
     clusters = self.get_clusters(cluster_labels, num_clusters)
 
-    representative_nodes = self.get_representative_nodes(clusters, x_test)
+    representative_nodes = self.get_representative_nodes(clusters, features)
     print(f'representative_nodes: {representative_nodes}\n')
 
     print('Verificação das classes de um cluster específico')
-    for index in clusters[10]:
-      print(y_test[index])
+    for index in clusters[1]:
+      print(labels[index])
 
     # Testando meu algoritmo -> avaliação do nó representativo
-    representative_node_acc_list = self.avaliate_representative_nodes(clusters, y_test, representative_nodes)
+    representative_node_acc_list = self.avaliate_representative_nodes(clusters, labels, representative_nodes)
 
     # ------------- Task Matheus: criando nós sintéticos --------------
-    edge_index = self.create_sintetic_nodes(edge_index, features, labels, clusters, representative_nodes, y_test)
+    edge_index = self.create_sintetic_nodes(edge_index, features, labels, clusters, representative_nodes)
 
     return edge_index
 
@@ -221,7 +221,7 @@ class GCN_Clustering():
 
     return x_test, y_test
   
-  def run_cluster(self, x_test, y_test):
+  def run_cluster(self, features, labels):
 
     # Validation functions
     def evaluate(y_true, y_pred):
@@ -275,7 +275,7 @@ class GCN_Clustering():
       metric=METRIC,
       linkage=LINKAGE,
     )
-    model = model.fit(x_test)
+    model = model.fit(features)
 
     # plt.title("Hierarchical Clustering Dendrogram")
     # # plot the top three levels of the dendrogram
@@ -284,7 +284,7 @@ class GCN_Clustering():
     # plt.show()
 
     # Avaliating clusters
-    y_true = np.array(y_test)
+    y_true = np.array(labels)
     # print(f'y_true: {y_true}')
     # print(f'y_pred: {model.labels_}')
     # print(f'len(y_true): {len(y_true)}')
@@ -339,7 +339,7 @@ class GCN_Clustering():
 
     return clusters
 
-  def get_representative_nodes(self, clusters, x_test):
+  def get_representative_nodes(self, clusters, features):
     representative_nodes = []
     sum_distances = []
     for i_cluster in range(0,len(clusters)):
@@ -348,27 +348,27 @@ class GCN_Clustering():
         for j in range(0,len(clusters[i_cluster])):
           sum_distances[i_cluster].append(0)
           # Soma das diferenças de 'coordenadas' ao quadrado (número de coordenadas igual a len(x_test[i]))
-          sum_distances[i_cluster][-1] = sum([abs(x_test[clusters[i_cluster][i]][k] - x_test[clusters[i_cluster][j]][k])**2 for k in range(0,len(x_test[i]))])
+          sum_distances[i_cluster][-1] = sum([abs(features[clusters[i_cluster][i]][k] - features[clusters[i_cluster][j]][k])**2 for k in range(0,len(features[i]))])
           sum_distances[i_cluster][-1] = math.sqrt(sum_distances[i_cluster][-1])
 
-      # Realiza append do índice do nó representativo em x_test (nó correspondente a clusters[i])
+      # Realiza append do índice do nó representativo em features (nó correspondente a clusters[i])
       representative_nodes.append(( clusters[i_cluster][sum_distances[i_cluster].index(min(sum_distances[i_cluster]))] ))
 
     return representative_nodes
 
-  def avaliate_representative_nodes(self, clusters, y_test, representative_nodes):
+  def avaliate_representative_nodes(self, clusters, labels, representative_nodes):
     
     print('---------------- Avaliating Representative Nodes ----------------')
 
     representative_nodes_acc_list = []
     for index, cluster in enumerate(clusters):
-      representative_node_class = y_test[representative_nodes[index]]
+      representative_node_class = labels[representative_nodes[index]]
       print(f'y[representative_node]: {representative_node_class}')
 
       same_class_sum = 0
       for node in cluster:
-        # print(f'node: {node}, y[node]: {y_test[node]}')
-        if y_test[node] == representative_node_class:
+        # print(f'node: {node}, y[node]: {labels[node]}')
+        if labels[node] == representative_node_class:
           same_class_sum += 1
 
       acc = same_class_sum / len(cluster)
@@ -406,7 +406,7 @@ class GCN_Clustering():
 
     return representative_nodes_acc_list
 
-  def create_sintetic_nodes(self, edge_index, features, labels, clusters, representative_nodes, y_test):
+  def create_sintetic_nodes(self, edge_index, features, labels, clusters, representative_nodes):
     
     print(f'--- ANTES DE CONECTAR ---\n')
     print(f'edge_index = {edge_index[:30]}')
@@ -423,7 +423,7 @@ class GCN_Clustering():
     for index, cluster in enumerate(clusters):
       # representative node
       representative_node = representative_nodes[index]
-      representative_node_class = y_test[representative_node]
+      representative_node_class = labels[representative_node]
 
       # sintetic node
       sintetic_node_index = len(features - 1)
@@ -439,6 +439,7 @@ class GCN_Clustering():
       # TODO: CONFIRMAR SE ISSO ESTÁ CORRETO (acho que estou conectando o índice "node" errado)
       # TODO: "node" é o índice do nó no x_test e não o indice no dataset como um todo
       # TODO: talvez eu tenha que gerar os clusters a partir de todo o dataset, nao só o x_test e y_test
+      # CORREGIDO: Agora gerei os clusters utilizando todo o dataset, não só o split de teste. Logo, "node" é o índice correto
       for node in cluster:
         if node != representative_node:
           edge_index.append((sintetic_node_index, node))
