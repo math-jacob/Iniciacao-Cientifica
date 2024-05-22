@@ -28,8 +28,10 @@ class GCN_Clustering():
     val_mask: list,
     class_size: int,
     k:int,
-    network: str = 'gcn',
-    metric: str = 'euclidean',
+    metric:str = 'euclidean',
+    alpha:float = 0.95,
+    linkage:str = 'ward',
+    network: str = 'gcn'
     ):
     
     # Load parameters
@@ -38,9 +40,11 @@ class GCN_Clustering():
     self.val_mask = val_mask
     self.class_size = class_size
     self.k = k
+    self.metric = metric
+    self.alpha = alpha
+    self.linkage = linkage
     self.edge_index = None
     self.network = network
-    self.metric = metric
   
   def run(
     self, 
@@ -257,22 +261,23 @@ class GCN_Clustering():
       return acc
 
     # Parameters
-    N_CLUSTERS = 16
-    METRIC = 'euclidean'
-    LINKAGE = 'ward'
+    #N_CLUSTERS = 16
+    #METRIC = 'euclidean'
+    #LINKAGE = 'ward'
 
-    alpha = 0.95
+    #alpha = 0.95
     cluster_measurements = []
     aux_measures = {}
     index = 0
 
     # while alpha < 1:
-    N_CLUSTERS = int(alpha * self.class_size)
+    #N_CLUSTERS = int(alpha * self.class_size)
+    N_CLUSTERS = int(self.alpha * self.class_size)
 
     model = AgglomerativeClustering(
       n_clusters=N_CLUSTERS,
-      metric=METRIC,
-      linkage=LINKAGE,
+      metric=self.metric,
+      linkage=self.linkage,
     )
     model = model.fit(features)
 
@@ -294,7 +299,7 @@ class GCN_Clustering():
     # print("V_Measure ->", vscore)
     # print("Accuracy ->", acc)
 
-    aux_measures['alpha'] = alpha
+    aux_measures['alpha'] = self.alpha
     aux_measures['n_clusters'] = N_CLUSTERS
     aux_measures['nmi'] = nmi
     aux_measures['vscore'] = vscore
@@ -302,14 +307,21 @@ class GCN_Clustering():
 
     cluster_measurements.append(aux_measures.copy())
 
-    alpha += 0.05
-    index += 1
+    #alpha += 0.05
+    #index += 1
     aux_measures.clear()
 
     df = pd.DataFrame(cluster_measurements)
     print('Avaliando Cluster:')
     print(f'{df}\n')
-    export_to_excel(df, "cluster_avaliation.xlsx")
+    df_name = (
+      'k-'+str(self.k)
+      +'_metric-'+str(self.metric)
+      +'_alpha-'+str(self.alpha)
+      +'_link-'+str(self.linkage)
+      +'_ClusterAval.xlsx'
+      )
+    export_to_excel(df, df_name)
 
     print('Cluster Info:')
     print(f'n_clusters: {model.n_clusters_}')
@@ -385,7 +397,14 @@ class GCN_Clustering():
     print('representative_nodes_acc_list')
     print(f'{df}\n')
 
-    export_to_excel(df, 'representative_nodes_avaliation.xlsx')
+    df_name = (
+      'k-'+str(self.k)
+      +'_metric-'+str(self.metric)
+      +'_alpha-'+str(self.alpha)
+      +'_link-'+str(self.linkage)
+      +'_RepNodesAval.xlsx'
+      )
+    export_to_excel(df, df_name)
 
     return representative_nodes_acc_list
 
