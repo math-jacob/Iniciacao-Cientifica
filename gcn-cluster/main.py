@@ -87,7 +87,7 @@ class GCN_Clustering():
     pNEpochs = 200
     pNFeatures = len(features[0])
     pLR = 0.001
-    NUM_EXECS = 100
+    NUM_EXECS = 10
     
     # Defining GCN Model
     class Net(torch.nn.Module):
@@ -155,10 +155,12 @@ class GCN_Clustering():
 
     with open(ranked_list_path) as f:
       line_list_matrix = []
+      ranked_lists = []
 
       for line in f:
         line_list = line.strip().split(' ')
         line_list_matrix.append(line_list)
+        ranked_lists.append([int(x) for x in line_list])
 		
       for i in range(0, len(line_list_matrix)):
         l = self.k
@@ -177,7 +179,9 @@ class GCN_Clustering():
             # print('NAO PASSOU')
             # print(f'{int(line_list_matrix[i][j])} = {line_list_matrix[int(line_list_matrix[i][j])][0:k+1]}\n')
           j += 1
-    
+
+    self.ranked_lists = ranked_lists
+
     return edge_index
 
   def graph_augumentation(self, edge_index, features, labels):
@@ -409,7 +413,6 @@ class GCN_Clustering():
     return representative_nodes_acc_list
 
   def create_sintetic_nodes(self, edge_index, features, labels, clusters, representative_nodes):
-    
     print(f'--- ANTES DE CONECTAR ---\n')
     print(f'edge_index = {edge_index[:30]}')
     print(f'edge_index.shape = ({len(edge_index)},{len(edge_index[0])})\n')
@@ -425,23 +428,46 @@ class GCN_Clustering():
     for index, cluster in enumerate(clusters):
       # representative node
       representative_node = representative_nodes[index]
-      representative_node_class = labels[representative_node]
 
-      # sintetic node
+      # sintetic node index and features
       sintetic_node_index = len(features - 1)
       sintetic_node_features = features[representative_node]
 
+      # sintetic node label
+      if self.train_mask[representative_node]:
+        sintetic_node_class = labels[representative_node]
+      elif self.test_mask[representative_node]:
+        # print(f'{representative_node} TESTE')
+
+        classes_found = {}
+        for node in cluster:
+          if self.train_mask[node]:
+            if labels[node] in classes_found.keys():
+              classes_found[labels[node]] += 1
+            else:
+              classes_found[labels[node]] = 1
+        
+        # print(cluster)
+        # print(classes_found)
+
+        if (classes_found):
+          most_voted_class = max(classes_found, key=classes_found.get) 
+          sintetic_node_class = most_voted_class
+          # print(f'Most voted class: {most_voted_class}\n')
+        else:
+          # look into ranked list
+          for rk_node in self.ranked_lists[representative_node]:
+            if self.train_mask[rk_node]:
+              sintetic_node_class = labels[rk_node]
+              break
+
       # updating features, labels and maks
       new_features.append(sintetic_node_features)
-      new_labels.append(representative_node_class)
-      self.train_mask.append(False)
-      self.test_mask.append(True)
+      new_labels.append(sintetic_node_class)
+      self.train_mask.append(True)
+      self.test_mask.append(False)
 
-      # Updating edge_index -> connecting sintetic_node to all other nodes from its cluster
-      # TODO: CONFIRMAR SE ISSO ESTÁ CORRETO (acho que estou conectando o índice "node" errado)
-      # TODO: "node" é o índice do nó no x_test e não o indice no dataset como um todo
-      # TODO: talvez eu tenha que gerar os clusters a partir de todo o dataset, nao só o x_test e y_test
-      # CORREGIDO: Agora gerei os clusters utilizando todo o dataset, não só o split de teste. Logo, "node" é o índice correto
+      # updating edge_index -> connecting sintetic_node to all other nodes from its cluster
       for node in cluster:
         if node != representative_node:
           edge_index.append((sintetic_node_index, node))
