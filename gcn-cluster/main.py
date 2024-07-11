@@ -2,7 +2,7 @@
 import time
 import numpy as np
 import pandas as pd
-from utils import export_to_excel
+from utils import export_to_excel, dic_to_csv
 
 # Torch packages
 import torch
@@ -323,7 +323,7 @@ class GCN_Clustering():
       +'_metric-'+str(self.metric)
       +'_alpha-'+str(self.alpha)
       +'_link-'+str(self.linkage)
-      +'_ClusterAval.xlsx'
+      +'_ClusterAval'
       )
     export_to_excel(df, df_name)
 
@@ -379,6 +379,13 @@ class GCN_Clustering():
     
     print('---------------- Avaliating Representative Nodes ----------------')
 
+    dictionary = {
+      'cluster':  [],
+      'size':     [],
+      'predicted':[],
+      'acc':      [],
+    }
+
     representative_nodes_acc_list = []
     for index, cluster in enumerate(clusters):
       representative_node_class = labels[representative_nodes[index]]
@@ -389,6 +396,11 @@ class GCN_Clustering():
         # print(f'node: {node}, y[node]: {labels[node]}')
         if labels[node] == representative_node_class:
           same_class_sum += 1
+
+      dictionary['cluster'].append(index)
+      dictionary['size'].append(len(cluster))
+      dictionary['predicted'].append(same_class_sum)
+      dictionary['acc'].append(round(float(same_class_sum)/float(len(cluster)), 4))
 
       acc = same_class_sum / len(cluster)
       print(f'same_class_sum: {same_class_sum}')
@@ -403,13 +415,14 @@ class GCN_Clustering():
 
     df_name = (
       'k-'+str(self.k)
-      +'_metric-'+str(self.metric)
-      +'_alpha-'+str(self.alpha)
+      +'_met-'+str(self.metric)
+      +'_alp-'+str(self.alpha)
       +'_link-'+str(self.linkage)
       +'_RepNodesAval.xlsx'
-      )
+    )
     export_to_excel(df, df_name)
-
+    dic_to_csv(dictionary, df_name)
+    
     return representative_nodes_acc_list
 
   def create_sintetic_nodes(self, edge_index, features, labels, clusters, representative_nodes):

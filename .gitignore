@@ -11,3 +11,4 @@ agglomerative-clustering.py
 # Specific formats
 *.png
 *.xlsx
+*.csv
