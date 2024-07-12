@@ -12,3 +12,8 @@ agglomerative-clustering.py
 *.png
 *.xlsx
 *.csv
+
+# Datasets
+datasets/cub200/
+datasets/dogs/
+datasets/corel5k
