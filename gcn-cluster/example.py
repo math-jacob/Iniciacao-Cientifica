@@ -1,82 +1,174 @@
 from main import GCN_Clustering
 import numpy as np
+import pandas as pd
+from utils import export_to_excel
+
+datasets = [
+	# {
+	# 	'pN': 1360,
+	# 	'numberOfClasses': 17,
+	# 	'classes_file': './datasets/oxford17flowers/flowers_classes.txt',
+	# 	'features': [
+	# 		'./datasets/oxford17flowers/features/resnet152/features.npy',
+	# 		'./datasets/oxford17flowers/features/dpn92/features.npy',
+	# 		'./datasets/oxford17flowers/features/senet154/features.npy',
+	# 		'./datasets/oxford17flowers/features/vitb16/features.npy',
+	# 	],
+	# 	'ranked_lists': [
+	# 		'./datasets/oxford17flowers/ranked-lists/resnet.txt',
+	# 		'./datasets/oxford17flowers/ranked-lists/dpn.txt',
+	# 		'./datasets/oxford17flowers/ranked-lists/senet.txt',
+	# 		'./datasets/oxford17flowers/ranked-lists/vitb.txt',
+	# 	]
+	# },
+	{
+		'pN': 5000,
+		'numberOfClasses': 50,
+		'classes_file': './datasets/corel5k/corel5k_classes.txt',
+		'features': [
+			'./datasets/corel5k/features/resnet152/features.npy',
+			'./datasets/corel5k/features/dpn92/features.npy',
+			'./datasets/corel5k/features/senet154/features.npy',
+			'./datasets/corel5k/features/vitb16/features.npy',
+		],
+		'ranked_lists': [
+			'./datasets/corel5k/ranked-lists/resnet.txt',
+			'./datasets/corel5k/ranked-lists/dpn.txt',
+			'./datasets/corel5k/ranked-lists/senet.txt',
+			'./datasets/corel5k/ranked-lists/vitb.txt',
+		]
+	},
+	# {
+	# 	'pN': 20580,
+	# 	'numberOfClasses': 120,
+	# 	'classes_file': './datasets/dogs/dogs_classes.txt',
+	# 	'features': [
+	# 		'./datasets/dogs/features/resnet152/features.npy',
+	# 		'./datasets/dogs/features/dpn92/features.npy',
+	# 		'./datasets/dogs/features/senet154/features.npy',
+	# 	],
+	# 	'ranked_lists': [
+	# 		'./datasets/dogs/ranked-lists/resnet.txt',
+	# 		'./datasets/dogs/ranked-lists/dpn.txt',
+	# 		'./datasets/dogs/ranked-lists/senet.txt',
+	# 	]
+	# },
+	# {
+	# 	'pN': 11788,
+	# 	'numberOfClasses': 200,
+	# 	'classes_file': './datasets/cub200/cub200_classes.txt',
+	# 	'features': [
+	# 		'./datasets/cub200/features/resnet152/features.npy',
+	# 		'./datasets/cub200/features/dpn92/features.npy',
+	# 		'./datasets/cub200/features/senet154/features.npy',
+	# 		'./datasets/cub200/features/vitb16/features.npy',
+	# 	],
+	# 	'ranked_lists': [
+	# 		'./datasets/cub200/ranked-lists/resnet.txt',
+	# 		'./datasets/cub200/ranked-lists/dpn.txt',
+	# 		'./datasets/cub200/ranked-lists/senet.txt',
+	# 		'./datasets/cub200/ranked-lists/vitb.txt',
+	# 	]
+	# },
+]
 
 # Parameters
 K=5
 NETWORK = 'gcn'
-numberOfClasses = 17
 ALPHA = 0.95
 METRIC = 'euclidean'
 LINKAGE = 'ward'
 
-# ------------------------- Load Masks ------------------------
-			# Variables
-pN = 1360 # pn == n° de nós
-classSize = 80 # clasSize == n° de nós rotulados para cada classe
-trPerClass = 15 # quantos nós de TREINAMENTO para cada classe
-valPerClass = 0*trPerClass # quantos nós de VALIDAÇÃO para cada classe (* 0 se nao tiver validação)
+acc_list = []
+for dataset in datasets:
+	for index in range(len(dataset['features'])):
 
-train_mask = []
-val_mask = []
-test_mask = []
+		# ------------------------- Load Masks ------------------------
 
-for i in range (pN):
-# o símbolo // representa floor division
-	d = i % classSize
-	if (d<trPerClass):
-		valueTr = True
-		valueVal = False
-	else:
-		valueTr = False
-		if (d<(valPerClass+trPerClass)):
-			valueVal = True
-		else:
-			valueVal = False
-	valueTest = (not valueTr) and (not valueVal)
-	
-	train_mask.append(valueTr)
-	test_mask.append(valueTest)
-	val_mask.append(valueVal)
+		# Variables
+		pN = dataset['pN'] # pn == n° de nós
+		numberOfClasses = dataset['numberOfClasses']
+		classSize = pN / numberOfClasses # clasSize == n° de nós rotulados para cada classe
 
-print (f'train_mask: {train_mask[:20]}')
-print (f'test_mask: {test_mask[:20]}')
-print (f'val_mask: {val_mask[:20]}\n')
+		trPerClass = 15 # quantos nós de TREINAMENTO para cada classe
+		valPerClass = 0*trPerClass # quantos nós de VALIDAÇÃO para cada classe (* 0 se nao tiver validação)
 
-# ------------------------- Load Classes ------------------------
+		train_mask = []
+		val_mask = []
+		test_mask = []
 
-y_file = './oxford17flowers-driveIC/flowers_classes.txt'
-y = []
-with open(y_file) as f:
-	for line in f:
-		line_list = line.strip().split(':')
-		y.append(int(line_list[1]))
+		for i in range (pN):
+			d = i % classSize
+			if (d<trPerClass):
+				valueTr = True
+				valueVal = False
+			else:
+				valueTr = False
+				if (d<(valPerClass+trPerClass)):
+					valueVal = True
+				else:
+					valueVal = False
+			valueTest = (not valueTr) and (not valueVal)
+
+			train_mask.append(valueTr)
+			test_mask.append(valueTest)
+			val_mask.append(valueVal)
+
+		print (f'train_mask: {train_mask[:20]}')
+		print (f'test_mask: {test_mask[:20]}')
+		print (f'val_mask: {val_mask[:20]}')
+		print(f'train_mask.shape: {len(train_mask)}\n')
+
+		print(f'feature: {dataset["features"][index]}')
+
+		# ------------------------- Load Classes ------------------------
+		y_file = dataset['classes_file']
+		y = []
+		with open(y_file) as f:
+			for line in f:
+				line_list = line.strip().split(':')
+				if dataset['features'][index].split('/')[2] == 'cub200':
+					y.append(int(line_list[1]) - 1)
+				else:
+					y.append(int(line_list[1]))
 		
-print(f'y: {y[:20]}')
-print(f'len(y): {len(y)}\n')
+		print(f'y: {y[:20]}')
+		print(f'len(y): {len(y)}\n')
 
-#-------------------------------- Load Feature Matrix -------------------------------------
-feat_matrix_file = './oxford17flowers-driveIC/cnn-last-linear-resnet/features.npy'
-x = np.load(feat_matrix_file)
+		#-------------------------------- Load Feature Matrix -------------------------------------
+		feat_matrix_file = dataset['features'][index]
+		x = np.load(feat_matrix_file)
 
-print(f'feat_matrix: {x}\n')
+		print(f'feat_matrix: {x}\n')
 
-# ------------------------- Run GCN Clustering Method ------------------------
+		# ------------------------- Run GCN Clustering Method ------------------------
 
-gcn_clustering = GCN_Clustering(
-	train_mask=train_mask,
-	test_mask=test_mask,
-	val_mask=[],
-	class_size=classSize,
-	k=K,
-   	metric=METRIC,
- 	network=NETWORK,
-    alpha=ALPHA,
-	linkage=LINKAGE
-)
+		gcn_clustering = GCN_Clustering(
+			train_mask=train_mask,
+			test_mask=test_mask,
+			val_mask=[],
+			class_size=classSize,
+			k=K,
+			metric=METRIC,
+			network=NETWORK,
+			alpha=ALPHA,
+			linkage=LINKAGE
+		)
 
-gcn_clustering.run(
-	features=x,
-	labels=y,
-	ranked_list_path='./oxford17flowers-driveIC/ranked-lists-CNN-ResNet.txt',
-	num_classes=numberOfClasses,
-)
+		acc = gcn_clustering.run(
+			features=x,
+			labels=y,
+			ranked_list_path=dataset['ranked_lists'][index],
+			num_classes=numberOfClasses,
+		)
+
+		acc_list.append({
+			'dataset': dataset['features'][index].split('/')[2],
+			'feature': dataset['features'][index].split('/')[4], 
+			'acc': acc
+		})
+
+print(acc_list)
+df = pd.DataFrame(acc_list)
+print(df)
+# export_to_excel(df, 'flowers17_features_acc')
