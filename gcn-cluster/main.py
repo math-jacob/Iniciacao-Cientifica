@@ -3,6 +3,7 @@ import time
 import numpy as np
 import pandas as pd
 from utils import export_to_excel, dic_to_csv
+from networks import load_network, check_network
 
 # Torch packages
 import torch
@@ -33,6 +34,9 @@ class GCN_Clustering():
     linkage:str = 'ward',
     network: str = 'gcn'
     ):
+
+    # Confirm network availability
+    check_network(network)
     
     # Load parameters
     self.train_mask = train_mask
@@ -85,7 +89,7 @@ class GCN_Clustering():
     # Variables
     pNNeurons = 32
     pNEpochs = 200
-    pNFeatures = len(features[0])
+    pNFeatures = len(self.features[0])
     pLR = 0.001
     NUM_EXECS = 10
     
@@ -95,6 +99,7 @@ class GCN_Clustering():
         super(Net, self).__init__()
         self.conv1 = GCNConv(pNFeatures, pNNeurons)
         self.conv2 = GCNConv(pNNeurons, num_classes)
+        self.embedding = None
 
       def forward(self, data):
         x, edge_index = data.x, data.edge_index
@@ -103,46 +108,56 @@ class GCN_Clustering():
         x = F.relu(x)
         x = F.dropout(x, training=self.training)
         x = self.conv2(x, edge_index)
-
+        self.embedding = x
         return F.log_softmax(x, dim=1)
     
+    # Loading model with different networks
+    # model = load_network(
+    #   pNFeatures,
+    #   pNNeurons,
+    #   num_classes,
+    #   self.network
+    # ).to(device)
+
     # Model and optimizer
     model = Net().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=pLR, weight_decay=5e-4)
 
     # Training
-    acc_list = []
-    for exec in range(NUM_EXECS):
-      model.train()
-      for epoch in range(pNEpochs):	
-        optimizer.zero_grad()
-        out = model(data)
+    model.train()
+    for epoch in range(pNEpochs):
+      if epoch+1 % 100 == 0:
+        # Divide pLR by 2 every 100 epochs
+        pLR /= 2
+      optimizer.zero_grad()
+      out = model(data)
 
-        # Overfit checking
-        # _, pred = out.max(dim=1)
-        # correct = float(pred[data.train_mask]
-        #   .eq(data.y[data.train_mask])
-        #   .sum()
-        #   .item())
-        # acc = correct / data.train_mask.sum().item()
-        # if acc == 1.0:
-        #   print(f"Early stoping on epoch {epoch}")
-        #   break
+      # Overfit checking
+      _, pred = out.max(dim=1)
+      correct = float(
+        pred[data.train_mask]
+          .eq(data.y[data.train_mask])
+          .sum()
+          .item()
+      )
+      acc = correct / data.train_mask.sum().item()
+      if acc == 1.0:
+        print(f"Early stoping on epoch {epoch}")
+        break
 
-        loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
-        loss.backward()
-        optimizer.step()
-      
-      model.eval()
-      _, pred = model(data).max(dim=1)
+      loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
+      loss.backward()
+      optimizer.step()
+    
+    model.eval()
+    _, pred = model(data).max(dim=1)
 
-      # Training accuracy
-      correct = float(pred[data.test_mask].eq(data.y[data.test_mask]).sum().item())
-      acc = correct / data.test_mask.sum().item()
-      acc_list.append(acc)
-      # print(f'acc_list = {acc_list}\n')
+    # Training accuracy
+    correct = float(pred[data.test_mask].eq(data.y[data.test_mask]).sum().item())
+    acc = correct / data.test_mask.sum().item()
 
-    print(f'Accuracy: {sum(acc_list)/NUM_EXECS}')
+    print(f'Accuracy: {acc}')
+    return acc
 
   def create_graph(self, ranked_list_path, features, labels):
     edge_index = self.compute_edge_index(ranked_list_path=ranked_list_path)
@@ -154,30 +169,25 @@ class GCN_Clustering():
     edge_index = []
 
     with open(ranked_list_path) as f:
-      line_list_matrix = []
       ranked_lists = []
 
       for line in f:
         line_list = line.strip().split(' ')
-        line_list_matrix.append(line_list)
         ranked_lists.append([int(x) for x in line_list])
 		
-      for i in range(0, len(line_list_matrix)):
-        l = self.k
+      for i in range(0, len(ranked_lists)):
         j = 0
-        while j < l and j < len(line_list_matrix[i]):
-          # print(f'\nTeste {(i,line_list_matrix[i][j])}')
-          if (i != int(line_list_matrix[i][j])) and (str(i) in line_list_matrix[int(line_list_matrix[i][j])][0:self.k+1]):
+        while j < self.k+1 and j < len(ranked_lists[i]):
+          # print(f'\nTeste {(i,ranked_lists[i][j])}')
+          if (i != ranked_lists[i][j]) and (i in ranked_lists[ranked_lists[i][j]][0:self.k+1]):
             # print('PASSOU')
-            # print(f'{int(line_list_matrix[i][j])} = {line_list_matrix[int(line_list_matrix[i][j])][0:k+1]}\n')
+            # print(f'{int(ranked_lists[i][j])} = {ranked_lists[int(ranked_lists[i][j])][0:self.k+1]}\n')
             # time.sleep(1)
+            edge_index.append((i, ranked_lists[i][j]))
             
-            edge_index.append((i, int(line_list_matrix[i][j])))
-          elif i == int(line_list_matrix[i][j]):
-            l += 1
           # else:
             # print('NAO PASSOU')
-            # print(f'{int(line_list_matrix[i][j])} = {line_list_matrix[int(line_list_matrix[i][j])][0:k+1]}\n')
+            # print(f'{int(ranked_lists[i][j])} = {ranked_lists[int(ranked_lists[i][j])][0:self.k+1]}\n')
           j += 1
 
     self.ranked_lists = ranked_lists
@@ -436,6 +446,8 @@ class GCN_Clustering():
     print(f'train_mask.shape = {len(self.train_mask)}')
     print(f'test_mask.shape = {len(self.test_mask)}\n')
 
+    print(f'labels.shape = ({len(labels)})\n')
+
     new_features = []
     new_labels = []
     for index, cluster in enumerate(clusters):
@@ -484,6 +496,7 @@ class GCN_Clustering():
       for node in cluster:
         if node != representative_node:
           edge_index.append((sintetic_node_index, node))
+      edge_index.append((representative_node, sintetic_node_index)) # linkando o representativo com o sintético --> ISSO É CORRETO??
 
     features = np.append(features, np.array(new_features), axis=0)
     labels = np.append(labels, np.array(new_labels), axis=0)
@@ -501,6 +514,6 @@ class GCN_Clustering():
     print(f'train_mask.shape = ({len(self.train_mask)})')
     print(f'test_mask.shape = ({len(self.test_mask)})\n')
 
-    print(f'labels.shape = ({len(labels)})\n')
+    print(f'labels.shape = ({len(self.labels)})\n')
 
     return edge_index
