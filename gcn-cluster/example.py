@@ -3,41 +3,80 @@ import numpy as np
 import pandas as pd
 from utils import export_to_excel
 
+def load_masks(pN, classSize, trPerClass, valPerClass):
+	train_mask = []
+	val_mask = []
+	test_mask = []
+
+	for i in range (pN):
+		d = i % classSize
+		if (d<trPerClass):
+			valueTr = True
+			valueVal = False
+		else:
+			valueTr = False
+			if (d<(valPerClass+trPerClass)):
+				valueVal = True
+			else:
+				valueVal = False
+		valueTest = (not valueTr) and (not valueVal)
+
+		train_mask.append(valueTr)
+		test_mask.append(valueTest)
+		val_mask.append(valueVal)
+
+	return train_mask, val_mask, test_mask
+
+def load_classes(y_file, dataset_name):
+	y = []
+	with open(y_file) as f:
+		for line in f:
+			line_list = line.strip().split(':')
+			if dataset_name == 'cub200':
+				y.append(int(line_list[1]) - 1)
+			else:
+				y.append(int(line_list[1]))
+	
+	return y
+
+def load_feature_matrix(feat_matrix_file):
+	return np.load(feat_matrix_file)
+
 datasets = [
-	# {
-	# 	'pN': 1360,
-	# 	'numberOfClasses': 17,
-	# 	'classes_file': './datasets/oxford17flowers/flowers_classes.txt',
-	# 	'features': [
-	# 		'./datasets/oxford17flowers/features/resnet152/features.npy',
-	# 		'./datasets/oxford17flowers/features/dpn92/features.npy',
-	# 		'./datasets/oxford17flowers/features/senet154/features.npy',
-	# 		'./datasets/oxford17flowers/features/vitb16/features.npy',
-	# 	],
-	# 	'ranked_lists': [
-	# 		'./datasets/oxford17flowers/ranked-lists/resnet.txt',
-	# 		'./datasets/oxford17flowers/ranked-lists/dpn.txt',
-	# 		'./datasets/oxford17flowers/ranked-lists/senet.txt',
-	# 		'./datasets/oxford17flowers/ranked-lists/vitb.txt',
-	# 	]
-	# },
 	{
-		'pN': 5000,
-		'numberOfClasses': 50,
-		'classes_file': './datasets/corel5k/corel5k_classes.txt',
+		'pN': 1360,
+		'numberOfClasses': 17,
+		'classes_file': './datasets/oxford17flowers/flowers_classes.txt',
 		'features': [
-			'./datasets/corel5k/features/resnet152/features.npy',
-			'./datasets/corel5k/features/dpn92/features.npy',
-			'./datasets/corel5k/features/senet154/features.npy',
-			'./datasets/corel5k/features/vitb16/features.npy',
+			'./datasets/oxford17flowers/features/resnet152/features.npy',
+			'./datasets/oxford17flowers/features/dpn92/features.npy',
+			'./datasets/oxford17flowers/features/senet154/features.npy',
+			'./datasets/oxford17flowers/features/vitb16/features.npy',
 		],
 		'ranked_lists': [
-			'./datasets/corel5k/ranked-lists/resnet.txt',
-			'./datasets/corel5k/ranked-lists/dpn.txt',
-			'./datasets/corel5k/ranked-lists/senet.txt',
-			'./datasets/corel5k/ranked-lists/vitb.txt',
+			'./datasets/oxford17flowers/ranked-lists/resnet.txt',
+			'./datasets/oxford17flowers/ranked-lists/dpn.txt',
+			'./datasets/oxford17flowers/ranked-lists/senet.txt',
+			'./datasets/oxford17flowers/ranked-lists/vitb.txt',
 		]
 	},
+	# {
+	# 	'pN': 5000,
+	# 	'numberOfClasses': 50,
+	# 	'classes_file': './datasets/corel5k/corel5k_classes.txt',
+	# 	'features': [
+	# 		'./datasets/corel5k/features/resnet152/features.npy',
+	# 		'./datasets/corel5k/features/dpn92/features.npy',
+	# 		'./datasets/corel5k/features/senet154/features.npy',
+	# 		'./datasets/corel5k/features/vitb16/features.npy',
+	# 	],
+	# 	'ranked_lists': [
+	# 		'./datasets/corel5k/ranked-lists/resnet.txt',
+	# 		'./datasets/corel5k/ranked-lists/dpn.txt',
+	# 		'./datasets/corel5k/ranked-lists/senet.txt',
+	# 		'./datasets/corel5k/ranked-lists/vitb.txt',
+	# 	]
+	# },
 	# {
 	# 	'pN': 20580,
 	# 	'numberOfClasses': 120,
@@ -82,63 +121,29 @@ LINKAGE = 'ward'
 acc_list = []
 for dataset in datasets:
 	for index in range(len(dataset['features'])):
-
-		# ------------------------- Load Masks ------------------------
+		print(f'feature: {dataset["features"][index]}')
 
 		# Variables
 		pN = dataset['pN'] # pn == n° de nós
 		numberOfClasses = dataset['numberOfClasses']
 		classSize = pN / numberOfClasses # clasSize == n° de nós rotulados para cada classe
-
-		trPerClass = 15 # quantos nós de TREINAMENTO para cada classe
+		trPerClass = (classSize * 0.3) # quantos nós de TREINAMENTO para cada classe //0.18
 		valPerClass = 0*trPerClass # quantos nós de VALIDAÇÃO para cada classe (* 0 se nao tiver validação)
 
-		train_mask = []
-		val_mask = []
-		test_mask = []
-
-		for i in range (pN):
-			d = i % classSize
-			if (d<trPerClass):
-				valueTr = True
-				valueVal = False
-			else:
-				valueTr = False
-				if (d<(valPerClass+trPerClass)):
-					valueVal = True
-				else:
-					valueVal = False
-			valueTest = (not valueTr) and (not valueVal)
-
-			train_mask.append(valueTr)
-			test_mask.append(valueTest)
-			val_mask.append(valueVal)
-
+		# Creating masks
+		train_mask, val_mask, test_mask = load_masks(pN, classSize, trPerClass, valPerClass)
 		print (f'train_mask: {train_mask[:20]}')
 		print (f'test_mask: {test_mask[:20]}')
 		print (f'val_mask: {val_mask[:20]}')
 		print(f'train_mask.shape: {len(train_mask)}\n')
 
-		print(f'feature: {dataset["features"][index]}')
-
-		# ------------------------- Load Classes ------------------------
-		y_file = dataset['classes_file']
-		y = []
-		with open(y_file) as f:
-			for line in f:
-				line_list = line.strip().split(':')
-				if dataset['features'][index].split('/')[2] == 'cub200':
-					y.append(int(line_list[1]) - 1)
-				else:
-					y.append(int(line_list[1]))
-		
+		# Loading classes
+		y = load_classes(dataset['classes_file'], dataset['features'][index].split('/')[2])
 		print(f'y: {y[:20]}')
 		print(f'len(y): {len(y)}\n')
 
-		#-------------------------------- Load Feature Matrix -------------------------------------
-		feat_matrix_file = dataset['features'][index]
-		x = np.load(feat_matrix_file)
-
+		# Loading feature matrix
+		x = load_feature_matrix(dataset['features'][index])
 		print(f'feat_matrix: {x}\n')
 
 		# ------------------------- Run GCN Clustering Method ------------------------
