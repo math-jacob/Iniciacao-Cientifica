@@ -3,10 +3,10 @@ import numpy as np
 import pandas as pd
 from utils import export_to_excel
 
-def load_masks(pN, classSize, trPerClass, valPerClass):
-	train_mask = []
-	val_mask = []
-	test_mask = []
+def load_masks(pN, classSize, tr_prop, val_prop):
+	trPerClass = int(classSize * tr_prop)
+	valPerClass = int(classSize * val_prop)
+	train_mask, val_mask, test_mask = [], [], []
 
 	for i in range (pN):
 		d = i % classSize
@@ -42,6 +42,24 @@ def load_classes(y_file, dataset_name):
 def load_feature_matrix(feat_matrix_file):
 	return np.load(feat_matrix_file)
 
+def get_hyperparameters(dataset_name):
+	# Example function returning hyperparameters based on the dataset
+
+	# --------- Hiperparametros do CVIU ----------
+	# tr_prop = 0.1, tr_test = 0.9
+	# 10e-4 learning
+	# 256 Neuronios
+	# k=40 reciproco
+	# ----------------------------------------------
+
+	hyperparameters = {
+		'flowers17': {'tr_prop': 0.1, 'val_prop': 0, 'pNNeurons': 256, 'pNEpochs': 200, 'pLR': 0.0001},
+		'dogs': {'tr_prop': 0.1, 'val_prop': 0, 'pNNeurons': 256, 'pNEpochs': 200, 'pLR': 0.0001},
+		'corel5k': {'tr_prop': 0.4, 'val_prop': 0, 'pNNeurons': 256, 'pNEpochs': 200, 'pLR': 0.001},
+		'cub200': {'tr_prop': 0.4, 'val_prop': 0, 'pNNeurons': 256, 'pNEpochs': 300, 'pLR': 0.0001},
+	}
+	return hyperparameters.get(dataset_name, {'tr_prop': 0.2, 'val_prop': 0.1, 'pNNeurons': 32, 'pNEpochs': 200, 'pLR': 0.001})
+
 datasets = [
 	{
 		'pN': 1360,
@@ -61,6 +79,21 @@ datasets = [
 		]
 	},
 	# {
+	# 	'pN': 20580,
+	# 	'numberOfClasses': 120,
+	# 	'classes_file': './datasets/dogs/dogs_classes.txt',
+	# 	'features': [
+	# 		'./datasets/dogs/features/resnet152/features.npy',
+	# 		'./datasets/dogs/features/dpn92/features.npy',
+	# 		'./datasets/dogs/features/senet154/features.npy',
+	# 	],
+	# 	'ranked_lists': [
+	# 		'./datasets/dogs/ranked-lists/resnet.txt',
+	# 		'./datasets/dogs/ranked-lists/dpn.txt',
+	# 		'./datasets/dogs/ranked-lists/senet.txt',
+	# 	]
+	# },
+	# {
 	# 	'pN': 5000,
 	# 	'numberOfClasses': 50,
 	# 	'classes_file': './datasets/corel5k/corel5k_classes.txt',
@@ -75,21 +108,6 @@ datasets = [
 	# 		'./datasets/corel5k/ranked-lists/dpn.txt',
 	# 		'./datasets/corel5k/ranked-lists/senet.txt',
 	# 		'./datasets/corel5k/ranked-lists/vitb.txt',
-	# 	]
-	# },
-	# {
-	# 	'pN': 20580,
-	# 	'numberOfClasses': 120,
-	# 	'classes_file': './datasets/dogs/dogs_classes.txt',
-	# 	'features': [
-	# 		'./datasets/dogs/features/resnet152/features.npy',
-	# 		'./datasets/dogs/features/dpn92/features.npy',
-	# 		'./datasets/dogs/features/senet154/features.npy',
-	# 	],
-	# 	'ranked_lists': [
-	# 		'./datasets/dogs/ranked-lists/resnet.txt',
-	# 		'./datasets/dogs/ranked-lists/dpn.txt',
-	# 		'./datasets/dogs/ranked-lists/senet.txt',
 	# 	]
 	# },
 	# {
@@ -112,68 +130,88 @@ datasets = [
 ]
 
 # Parameters
-K=5
+K=40
 NETWORK = 'gcn'
-ALPHA = 0.95
+ALPHA = 0.2
 METRIC = 'euclidean'
 LINKAGE = 'ward'
 
-acc_list = []
 for dataset in datasets:
+	acc_list = []
 	for index in range(len(dataset['features'])):
-		print(f'feature: {dataset["features"][index]}')
+		for alpha in [0.2, 0.4, 0.8]:
+			ALPHA = alpha
 
-		# Variables
-		pN = dataset['pN'] # pn == n° de nós
-		numberOfClasses = dataset['numberOfClasses']
-		classSize = pN / numberOfClasses # clasSize == n° de nós rotulados para cada classe
-		trPerClass = (classSize * 0.3) # quantos nós de TREINAMENTO para cada classe //0.18
-		valPerClass = 0*trPerClass # quantos nós de VALIDAÇÃO para cada classe (* 0 se nao tiver validação)
+			print(f'feature: {dataset["features"][index]}')
 
-		# Creating masks
-		train_mask, val_mask, test_mask = load_masks(pN, classSize, trPerClass, valPerClass)
-		print (f'train_mask: {train_mask[:20]}')
-		print (f'test_mask: {test_mask[:20]}')
-		print (f'val_mask: {val_mask[:20]}')
-		print(f'train_mask.shape: {len(train_mask)}\n')
+			# Variables
+			dataset_name = dataset['features'][index].split('/')[2]
+			pN = dataset['pN']
+			numberOfClasses = dataset['numberOfClasses']
+			classSize = pN // numberOfClasses
+			hyperparameters = get_hyperparameters(dataset_name)
 
-		# Loading classes
-		y = load_classes(dataset['classes_file'], dataset['features'][index].split('/')[2])
-		print(f'y: {y[:20]}')
-		print(f'len(y): {len(y)}\n')
+			# Creating masks
+			train_mask, val_mask, test_mask = load_masks(pN, classSize, hyperparameters['tr_prop'], hyperparameters['val_prop'])
 
-		# Loading feature matrix
-		x = load_feature_matrix(dataset['features'][index])
-		print(f'feat_matrix: {x}\n')
+			print (f'train_mask: {train_mask[:20]}')
+			train_count = sum(1 for node in train_mask if node)
+			print (f'train_mask.shape: ({train_count})\n')
 
-		# ------------------------- Run GCN Clustering Method ------------------------
+			print (f'test_mask: {test_mask[:20]}')
+			test_count = sum(1 for node in test_mask if node)
+			print (f'test_mask.shape: ({test_count})\n')
 
-		gcn_clustering = GCN_Clustering(
-			train_mask=train_mask,
-			test_mask=test_mask,
-			val_mask=[],
-			class_size=classSize,
-			k=K,
-			metric=METRIC,
-			network=NETWORK,
-			alpha=ALPHA,
-			linkage=LINKAGE
-		)
+			print (f'val_mask: {val_mask[:20]}')
+			val_count = sum(1 for node in val_mask if node)
+			print(f'val_mask.shape: {val_count}\n')
 
-		acc = gcn_clustering.run(
-			features=x,
-			labels=y,
-			ranked_list_path=dataset['ranked_lists'][index],
-			num_classes=numberOfClasses,
-		)
+			# Loading classes
+			y = load_classes(dataset['classes_file'], dataset_name)
+			print(f'len(y): {len(y)}\n')
 
-		acc_list.append({
-			'dataset': dataset['features'][index].split('/')[2],
-			'feature': dataset['features'][index].split('/')[4], 
-			'acc': acc
-		})
+			# Loading feature matrix
+			x = load_feature_matrix(dataset['features'][index])
+			print(f'feat_matrix: {x}\n')
 
-print(acc_list)
-df = pd.DataFrame(acc_list)
-print(df)
-# export_to_excel(df, 'flowers17_features_acc')
+			# ------------------------- Run GCN Clustering Method ------------------------
+			gcn_clustering = GCN_Clustering(
+				train_mask=train_mask,
+				test_mask=test_mask,
+				val_mask=[],
+				class_size=classSize,
+				k=K,
+				metric=METRIC,
+				network=NETWORK,
+				alpha=ALPHA,
+				linkage=LINKAGE
+			)
+
+			acc = gcn_clustering.run(
+				features=x,
+				feature_name=dataset['features'][index].split('/')[4],
+				labels=y,
+				ranked_list_path=dataset['ranked_lists'][index],
+				num_classes=numberOfClasses,
+				apply_cluster=True,
+			)
+
+			acc_list.append({
+				'dataset': dataset_name,
+				'feature': dataset['features'][index].split('/')[4],
+				'alpha': ALPHA,
+				'accuracy': acc
+			})
+
+	df = pd.DataFrame(acc_list)
+	print(df)
+
+	df_name = (
+		'feat-'+dataset['features'][index].split('/')[4]
+		+'_k-'+str(K)
+		+'_met-'+str(METRIC)
+		+'_alp-'+str(ALPHA)
+		+'_link-'+str(LINKAGE)
+		+'_GCNClusteringAcc'
+	)
+	export_to_excel(df, df_name)

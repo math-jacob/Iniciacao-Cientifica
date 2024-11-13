@@ -50,34 +50,41 @@ class GCN_Clustering():
     self.edge_index = None
     self.network = network
   
-  def run( self, features: np.array, labels: np.array, ranked_list_path: str, num_classes: int):
+  def run(self, features: np.array, feature_name, labels: np.array, ranked_list_path: str, num_classes: int, apply_cluster: True):
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Edge index
-    edge_index = self.create_graph(ranked_list_path=ranked_list_path, features=features, labels=labels)
+    edge_index = self.create_graph(ranked_list_path, features, feature_name, labels, apply_cluster)
     edge_index = torch.tensor(edge_index)
     edge_index = edge_index.t().contiguous().to(device)
 
     # Data definition
+    if (not apply_cluster):
+      self.features = features
+      self.labels = labels
     data = self.prepare_data(self.features, self.labels, edge_index, device)
 
-    # Variables
-    pNNeurons = 32
+    # Hyperparameters
+    pNNeurons = 256
     pNEpochs = 400
-    pLR = 0.001
+    pLR = 0.0001
     pNFeatures = len(self.features[0])
 
     # Initializing model
-    model, optimizer = self.initialize_model(pNFeatures, pNNeurons, num_classes, device)
+    model, optimizer = self.initialize_model(pNFeatures, pNNeurons, pLR, num_classes, device)
 
-    # Training
-    self.train_model(data, model, optimizer, pNEpochs, pLR)
-    
-    # Evaluating
-    acc = self.evaluate_model(data, model)
+    sum_acc = 0
+    NUM_EXECS = 10
+    for i in range(NUM_EXECS):
+      # Training
+      self.train_model(data, model, optimizer, pNEpochs, pLR)
+      
+      # Evaluating
+      acc = self.evaluate_model(data, model)
+      sum_acc += acc
 
-    return acc
+    return sum_acc / NUM_EXECS
 
   def prepare_data(self, features, labels, edge_index, device):
     x = torch.tensor(features).to(device)
@@ -91,9 +98,9 @@ class GCN_Clustering():
 
     return data
 
-  def initialize_model(self, pNFeatures, pNNeurons, num_classes, device):
+  def initialize_model(self, pNFeatures, pNNeurons, pLR, num_classes, device):
     model = load_network(pNFeatures, pNNeurons, num_classes, self.network).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=pLR, weight_decay=5e-4)
     
     return model, optimizer
 
@@ -131,9 +138,11 @@ class GCN_Clustering():
 
     return acc
 
-  def create_graph(self, ranked_list_path, features, labels):
+  def create_graph(self, ranked_list_path, features, feature_name, labels, apply_cluster):
     edge_index = self.compute_edge_index(ranked_list_path=ranked_list_path)
-    edge_index = self.graph_augumentation(edge_index, features, labels)
+
+    if apply_cluster:
+      edge_index = self.graph_augumentation(edge_index, features, feature_name, labels)
 
     return edge_index
 
@@ -152,27 +161,19 @@ class GCN_Clustering():
     self.ranked_lists = ranked_lists
     return edge_index
 
-  def graph_augumentation(self, edge_index, features, labels):
-    x_test, y_test = self.get_test_features_and_labels(features, labels)
-
-    cluster_labels, num_clusters = self.run_cluster(features, labels)
+  def graph_augumentation(self, edge_index, features, feature_name, labels):
+    cluster_labels, num_clusters = self.run_cluster(features, feature_name, labels)
     clusters = self.get_clusters(cluster_labels, num_clusters)
 
     representative_nodes = self.get_representative_nodes(clusters, features)
     print(f'representative_nodes: {representative_nodes}\n')
-    representative_node_acc_list = self.evaluate_representative_nodes(clusters, labels, representative_nodes)
+    representative_node_acc_list = self.evaluate_representative_nodes(feature_name, clusters, labels, representative_nodes)
 
     edge_index = self.create_sintetic_nodes(edge_index, features, labels, clusters, representative_nodes)
 
     return edge_index
-
-  def get_test_features_and_labels(self, features, labels):
-    x_test = [features[i] for i in range(len(features)) if self.test_mask[i]]
-    y_test = [labels[i] for i in range(len(labels)) if self.test_mask[i]]
-
-    return np.array(x_test), np.array(y_test)
   
-  def run_cluster(self, features, labels):
+  def run_cluster(self, features, feature_name, labels):
     N_CLUSTERS = int(self.alpha * self.class_size)
     model = AgglomerativeClustering(
       n_clusters=N_CLUSTERS,
@@ -188,11 +189,11 @@ class GCN_Clustering():
     df = pd.DataFrame(cluster_measurements)
     print(f'{df}\n')
 
-    print('Avaliando Cluster:')
     df_name = (
-      'k-'+str(self.k)
-      +'_metric-'+str(self.metric)
-      +'_alpha-'+str(self.alpha)
+      'feat-'+str(feature_name)
+      +'_k-'+str(self.k)
+      +'_met-'+str(self.metric)
+      +'_alp-'+str(self.alpha)
       +'_link-'+str(self.linkage)
       +'_ClusterAval'
     )
@@ -203,7 +204,6 @@ class GCN_Clustering():
     print(f'labels_: {model.labels_}')
     print(f'n_features_in: {model.n_features_in_}')
     print(f'n_connected_components: {model.n_connected_components_}\n')
-
     with np.printoptions(threshold=np.inf):
       print(f'cluster_labels = {model.labels_}, {model.labels_.shape}\n')
 
@@ -239,10 +239,10 @@ class GCN_Clustering():
       clusters[label].append(i)
 
     # Printing clusters
-    print('------------------ Printing Clusters ------------------')
+    print('-------------------------------------------------- Printing Clusters --------------------------------------------------')
     for i, cluster in enumerate(clusters):
       print(f'Cluster {i}: {cluster}')
-    print('\n')
+    print('------------------------------------------------------------------------------------------------------------\n')
 
     return clusters
 
@@ -258,7 +258,7 @@ class GCN_Clustering():
 
     return representative_nodes
 
-  def evaluate_representative_nodes(self, clusters, labels, representative_nodes):
+  def evaluate_representative_nodes(self, feature_name, clusters, labels, representative_nodes):
     
     print('---------------- Avaliating Representative Nodes ----------------')
 
@@ -266,7 +266,7 @@ class GCN_Clustering():
       'cluster':  [],
       'size':     [],
       'predicted':[],
-      'acc':      [],
+      'accuracy': [],
     }
 
     representative_nodes_acc_list = []
@@ -282,7 +282,7 @@ class GCN_Clustering():
       dictionary['cluster'].append(index)
       dictionary['size'].append(len(cluster))
       dictionary['predicted'].append(same_class_sum)
-      dictionary['acc'].append(round(float(same_class_sum)/float(len(cluster)), 4))
+      dictionary['accuracy'].append(round(float(same_class_sum)/float(len(cluster)), 4))
 
       acc = same_class_sum / len(cluster)
       print(f'same_class_sum: {same_class_sum}')
@@ -291,19 +291,19 @@ class GCN_Clustering():
 
       representative_nodes_acc_list.append(acc)
     
-    df = pd.DataFrame(representative_nodes_acc_list, columns=['accuracy'])
+    df = pd.DataFrame(dictionary)
     print('representative_nodes_acc_list')
     print(f'{df}\n')
 
     df_name = (
-      'k-'+str(self.k)
+      'feat-'+feature_name
+      +'_k-'+str(self.k)
       +'_met-'+str(self.metric)
       +'_alp-'+str(self.alpha)
       +'_link-'+str(self.linkage)
       +'_RepNodesAval.xlsx'
     )
     export_to_excel(df, df_name)
-    dic_to_csv(dictionary, df_name)
     
     return representative_nodes_acc_list
 
@@ -322,13 +322,20 @@ class GCN_Clustering():
 
     new_features = []
     new_labels = []
+    pN = len(features)
     for index, cluster in enumerate(clusters):
       # representative node
       representative_node = representative_nodes[index]
 
-      # syntetic node index and features
-      synthetic_node_index = len(features - 1)
-      synthetic_node_features = features[representative_node]
+      # syntetic node index
+      synthetic_node_index = pN
+
+      # synthetic_feature = representative_feature
+      # synthetic_node_features = features[representative_node]
+
+      # synthetic_feature = média das features dos nós que estão no cluster do representativo
+      cluster_features = [features[node] for node in cluster]
+      synthetic_node_features = np.mean(cluster_features, axis=0)
 
       # syntetic node label
       synthetic_node_label = labels[representative_node]
@@ -342,10 +349,17 @@ class GCN_Clustering():
       self.test_mask.append(False)
 
       # updating edge_index -> connecting synthetic_node to all other nodes from its cluster
-      for node in cluster:
-        if node != representative_node:
-          edge_index.append((synthetic_node_index, node))
-      edge_index.append((representative_node, synthetic_node_index)) # linkando o representativo com o sintético --> ISSO É CORRETO??
+      # Calculando a distância euclidiana entre cada cluster_feature e synthetic_node_features
+      distances = [np.linalg.norm(feature - synthetic_node_features) for feature in cluster_features]
+      # Ranqueando as cluster_features da mais próxima à mais distante em relação a synthetic_node_features
+      ranked_nodes = [node for _, node in sorted(zip(distances, cluster))]
+      L = 40
+      # Adicionando arestas para os 5 nós mais próximos
+      for node in ranked_nodes[:L]:  # Seleciona os 5 nós mais próximos
+        edge_index.append((synthetic_node_index, node))
+      edge_index.append((representative_node, synthetic_node_index))  # linkando o representativo com o sintético
+
+      pN += 1
 
     features = np.append(features, np.array(new_features), axis=0)
     labels = np.append(labels, np.array(new_labels), axis=0)
